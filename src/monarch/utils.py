@@ -103,6 +103,61 @@ def calculate_multiple_cardiac_loop_areas(strain, stress):
     return areas
 
 
+def get_tau_relaxation(p, t, i_start, i_end, p_floor=None, n_min=4):
+    """Relaxation time constant of the isovolumic pressure decay [ms].
+
+    Two estimates are returned:
+      tau_weiss   Weiss et al. 1976: ln(P) is regressed on time, tau = -1/slope.
+                  Assumes the decay heads for zero, so it needs P > 0 throughout
+                  the window and returns NaN otherwise. Fitted over the window
+                  truncated at p_floor, conventionally EDP + 5 mmHg: catheter
+                  studies stop there because ln(P) blows up as P approaches the
+                  asymptote, which biases tau low. Pass p_floor=None to fit the
+                  whole window instead.
+      tau_glantz  Raff & Glantz 1981: dP/dt is regressed on P, tau = -1/slope.
+                  Permits a non-zero asymptote, so it also works when the
+                  simulated pressure crosses zero during relaxation. Fitted over
+                  the full window, which is where this method is normally applied.
+
+    The window runs from peak -dP/dt (i_start) to valve opening (i_end), wrapping
+    around the end of the cycle when the decay crosses it. NaN is returned when
+    the window holds fewer than n_min samples or the regression does not decay.
+    """
+    n = len(t)
+    if i_end > i_start:
+        idx = np.arange(i_start, i_end + 1)
+    else:
+        idx = np.concatenate((np.arange(i_start, n), np.arange(0, i_end + 1)))
+
+    if len(idx) < n_min:
+        return np.nan, np.nan
+
+    dt_ms = (t[1] - t[0])*1e3
+    t_w = np.arange(len(idx))*dt_ms          # [ms], monotone across the wrap
+    p_w = p[idx]
+
+    # Weiss: ln(P) on time, over the window truncated at p_floor
+    i_w = slice(None)
+    if p_floor is not None:
+        below = np.flatnonzero(p_w <= p_floor)
+        if below.size and below[0] >= n_min:
+            i_w = slice(0, below[0])
+    tau_weiss = np.nan
+    if np.all(p_w[i_w] > 0):
+        slope = np.polyfit(t_w[i_w], np.log(p_w[i_w]), 1)[0]
+        if slope < 0:
+            tau_weiss = -1.0/slope
+
+    # Raff-Glantz: dP/dt on P
+    tau_glantz = np.nan
+    if np.ptp(p_w) > 0:
+        slope = np.polyfit(p_w, np.gradient(p_w, dt_ms), 1)[0]
+        if slope < 0:
+            tau_glantz = -1.0/slope
+
+    return tau_weiss, tau_glantz
+
+
 def get_outputs(model, time_g=0, match_strain=False):
     """Collect model outputs in Pandas dataframe"""
 
@@ -139,6 +194,16 @@ def get_outputs(model, time_g=0, match_strain=False):
     p_max_rv = max(model.pressures[:, 6])      # [mmHg]
     dpdt_max_rv = max(np.gradient(model.pressures[:, 6], model.time[1] - model.time[0]))  # [mmHg/s]
     dpdt_min_rv = min(np.gradient(model.pressures[:, 6], model.time[1] - model.time[0]))  # [mmHg/s]
+
+    # Relaxation time constants of the isovolumic pressure decay [ms]
+    dpdt_lv = np.gradient(model.pressures[:, 2], model.time[1] - model.time[0])
+    dpdt_rv = np.gradient(model.pressures[:, 6], model.time[1] - model.time[0])
+    tau_lv, tau_lv_g = get_tau_relaxation(model.pressures[:, 2], model.time,
+                                          int(np.argmin(dpdt_lv)), time_events['mv_opens'],
+                                          p_floor=edp + 5)
+    tau_rv, tau_rv_g = get_tau_relaxation(model.pressures[:, 6], model.time,
+                                          int(np.argmin(dpdt_rv)), time_events['tv_opens'],
+                                          p_floor=edp_rv + 5)
 
     # ED wall thickness [mm]
     ed_wth = wall_thickness[ed_frame]
@@ -285,7 +350,8 @@ def get_outputs(model, time_g=0, match_strain=False):
                              time_events['mv_closes'], time_events['av_closes'],
                              map, hr, dbp, sbp, ed_frame, es_frame, ed_time, es_time, ed_frame_rv, es_frame_rv,
                              ed_time_rv, es_time_rv, lap,
-                             edv_i, esv_i, rvedv_i, rvesv_i, work_lfw, work_sw, co_ras], ],
+                             edv_i, esv_i, rvedv_i, rvesv_i, work_lfw, work_sw, co_ras,
+                             tau_lv, tau_rv, tau_lv_g, tau_rv_g], ],
                         columns=['LVEDV', 'LVESV', 'LVEDP', 'LVESP', 'LVMaxP', 'LVMaxdP', 'LVMindP', 'LVSV', 'LVRF', 'LVEF', 'LVCO',
                                  'RVEDV', 'RVESV', 'RVEDP', 'RVESP', 'RVMaxP', 'RVMaxdP', 'RVMindP', 'RVSV', 'RVRF', 'RVEF', 'RVCO',
                                  'EDWthLfw', 'EDWthRfw', 'EDWthSw', 'ESWthLfw', 'ESWthRfw', 'ESWthSw',
@@ -302,7 +368,8 @@ def get_outputs(model, time_g=0, match_strain=False):
                                  'mvc', 'avc',
                                  'MAP', 'HR', 'DBP', 'SBP',
                                  'IED', 'IES', 'TED', 'TES', 'IED_RV', 'IES_RV', 'TED_RV', 'TES_RV', 'LAP',
-                                 'LVEDVi', 'LVESVi', 'RVEDVi', 'RVESVi', 'WorkLfw', 'WorkSw', 'CO_Ras'],
+                                 'LVEDVi', 'LVESVi', 'RVEDVi', 'RVESVi', 'WorkLfw', 'WorkSw', 'CO_Ras',
+                                 'LVTau', 'RVTau', 'LVTauG', 'RVTauG'],
                         index=[time_g])
 
     if match_strain:
