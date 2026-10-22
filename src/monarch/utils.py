@@ -246,6 +246,14 @@ def get_outputs(model, time_g=0, match_strain=False):
     co_rv = sv_rv / model.time[-1] * 60 / 1e3  # [L/min]
     hr = 60 / model.time[-1]  # [s]
 
+    # Arterial elastance, Ea = end-systolic pressure / stroke volume, in mmHg
+    # per MICROLITRE to match how it is reported for these animals; monarch's
+    # volumes are in mL, hence the factor of 1000. A stroke volume at or below
+    # zero means the chamber did not eject, so Ea is undefined rather than
+    # enormous: return NaN and let the caller see it.
+    ea_lv = esp / (sv * 1e3) if sv > 0.0 else np.nan
+    ea_rv = esp_rv / (sv_rv * 1e3) if sv_rv > 0.0 else np.nan
+
     # Volume rates
     dvdt_lv = np.gradient(model.volumes[:, 2], model.time)
     dvdt_rv = np.gradient(model.volumes[:, 6], model.time)
@@ -351,7 +359,8 @@ def get_outputs(model, time_g=0, match_strain=False):
                              map, hr, dbp, sbp, ed_frame, es_frame, ed_time, es_time, ed_frame_rv, es_frame_rv,
                              ed_time_rv, es_time_rv, lap,
                              edv_i, esv_i, rvedv_i, rvesv_i, work_lfw, work_sw, co_ras,
-                             tau_lv, tau_rv, tau_lv_g, tau_rv_g], ],
+                             tau_lv, tau_rv, tau_lv_g, tau_rv_g,
+                             ea_lv, ea_rv], ],
                         columns=['LVEDV', 'LVESV', 'LVEDP', 'LVESP', 'LVMaxP', 'LVMaxdP', 'LVMindP', 'LVSV', 'LVRF', 'LVEF', 'LVCO',
                                  'RVEDV', 'RVESV', 'RVEDP', 'RVESP', 'RVMaxP', 'RVMaxdP', 'RVMindP', 'RVSV', 'RVRF', 'RVEF', 'RVCO',
                                  'EDWthLfw', 'EDWthRfw', 'EDWthSw', 'ESWthLfw', 'ESWthRfw', 'ESWthSw',
@@ -369,7 +378,8 @@ def get_outputs(model, time_g=0, match_strain=False):
                                  'MAP', 'HR', 'DBP', 'SBP',
                                  'IED', 'IES', 'TED', 'TES', 'IED_RV', 'IES_RV', 'TED_RV', 'TES_RV', 'LAP',
                                  'LVEDVi', 'LVESVi', 'RVEDVi', 'RVESVi', 'WorkLfw', 'WorkSw', 'CO_Ras',
-                                 'LVTau', 'RVTau', 'LVTauG', 'RVTauG'],
+                                 'LVTau', 'RVTau', 'LVTauG', 'RVTauG',
+                                 'LVEa', 'RVEa'],
                         index=[time_g])
 
     if match_strain:
