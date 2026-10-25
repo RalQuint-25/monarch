@@ -254,6 +254,19 @@ def get_outputs(model, time_g=0, match_strain=False):
     ea_lv = esp / (sv * 1e3) if sv > 0.0 else np.nan
     ea_rv = esp_rv / (sv_rv * 1e3) if sv_rv > 0.0 else np.nan
 
+    # Pulmonary and systemic RC time, expressed in CARDIAC CYCLES rather than
+    # seconds so it is comparable across species and ages. tau = R * C, with R
+    # the arterial (not characteristic) resistance and C the arterial
+    # capacitance; dividing by the cycle length removes the heart-rate scaling.
+    # Both R and C scale with body size such that tau / cycle is close to
+    # invariant, so the human catheter value (~0.3) is a usable reference for
+    # a rat. This is a function of the PARAMETERS, not of the solution, but it
+    # is reported here so it can be targeted like any other output: a box on
+    # the capacitance alone cannot constrain it, because the resistance is free
+    # and moves to compensate.
+    tau_pulm = model.resistances.rap * model.capacitances.cap / model.time[-1]
+    tau_sys = model.resistances.ras * model.capacitances.cas / model.time[-1]
+
     # Volume rates
     dvdt_lv = np.gradient(model.volumes[:, 2], model.time)
     dvdt_rv = np.gradient(model.volumes[:, 6], model.time)
@@ -360,7 +373,7 @@ def get_outputs(model, time_g=0, match_strain=False):
                              ed_time_rv, es_time_rv, lap,
                              edv_i, esv_i, rvedv_i, rvesv_i, work_lfw, work_sw, co_ras,
                              tau_lv, tau_rv, tau_lv_g, tau_rv_g,
-                             ea_lv, ea_rv], ],
+                             ea_lv, ea_rv, tau_pulm, tau_sys], ],
                         columns=['LVEDV', 'LVESV', 'LVEDP', 'LVESP', 'LVMaxP', 'LVMaxdP', 'LVMindP', 'LVSV', 'LVRF', 'LVEF', 'LVCO',
                                  'RVEDV', 'RVESV', 'RVEDP', 'RVESP', 'RVMaxP', 'RVMaxdP', 'RVMindP', 'RVSV', 'RVRF', 'RVEF', 'RVCO',
                                  'EDWthLfw', 'EDWthRfw', 'EDWthSw', 'ESWthLfw', 'ESWthRfw', 'ESWthSw',
@@ -379,7 +392,7 @@ def get_outputs(model, time_g=0, match_strain=False):
                                  'IED', 'IES', 'TED', 'TES', 'IED_RV', 'IES_RV', 'TED_RV', 'TES_RV', 'LAP',
                                  'LVEDVi', 'LVESVi', 'RVEDVi', 'RVESVi', 'WorkLfw', 'WorkSw', 'CO_Ras',
                                  'LVTau', 'RVTau', 'LVTauG', 'RVTauG',
-                                 'LVEa', 'RVEa'],
+                                 'LVEa', 'RVEa', 'TauPulm', 'TauSys'],
                         index=[time_g])
 
     if match_strain:
