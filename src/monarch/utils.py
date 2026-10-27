@@ -546,6 +546,8 @@ def change_pars(model, pars):
                 model.heart.tau_d[chambers] = value
             elif par == "tr" + chamber_names[i]:
                 model.heart.tau_r[chambers] = value
+            elif par == "vmax" + chamber_names[i] or par == "v_max" + chamber_names[i]:
+                model.heart.v_max[chambers] = value
             elif par == "c1" + chamber_names[i]:
                 model.heart.c_1[chambers] = value
             elif par == "c3" + chamber_names[i]:
@@ -572,6 +574,8 @@ def change_pars(model, pars):
                     model.heart.tau_d[patch_mask] = value
                 elif base_par == "tr":
                     model.heart.tau_r[patch_mask] = value
+                elif base_par == "vmax" or base_par == "v_max":
+                    model.heart.v_max[patch_mask] = value
                 elif base_par == "c1":
                     model.heart.c_1[patch_mask] = value
                 elif base_par == "c3":
@@ -597,6 +601,8 @@ def change_pars(model, pars):
                 model.heart.tau_d[patch] = value
             elif par == "tr":
                 model.heart.tau_r[patch] = value
+            elif par == "vmax" or par == "v_max":
+                model.heart.v_max[patch] = value
             elif par == "c1":
                 model.heart.c_1[patch] = value
             elif par == "c3":
@@ -785,10 +791,10 @@ def list_change_pars():
 
     Note: Parameters with suffixes _lfw, _sw, _rfw apply to left free wall, septum wall,
     and right free wall patches respectively. For example: sfact_lfw, tad_sw, c1_rfw.
-    Supported parameters for wall-specific suffixes: sfact/sact, tad, td, tr, c1, c3, c4, tact.
+    Supported parameters for wall-specific suffixes: sfact/sact, tad, td, tr, vmax/v_max, c1, c3, c4, tact.
     """
     return ["sbv", "hr", "k_initial", "cvp", "cas", "cap", "cvs", "rvp", "rcs", "ras", "rvs", "rcp", "rap", "rav",
-            "rmvb", "rtvb", "sact", "sfact", "tad", "td", "tr", "c1", "c3", "c4", "tact", "sact_a", "sfact_a", "tad_a",
+            "rmvb", "rtvb", "sact", "sfact", "tad", "td", "tr", "vmax", "v_max", "c1", "c3", "c4", "tact", "sact_a", "sfact_a", "tad_a",
             "td_a", "tr_a", "c1_a", "c3_a", "c4_a", "tact_a", "sfact_lfw", "sfact_sw", "sfact_rfw", "tad_lfw", "tad_sw",
             "tad_rfw", "avd", "ivd_lv", "ivd_rv", "wth_p", "c1_p", "c3_p",
             "c4_p", "prestretch", "amreflfw", "amrefrfw", "amrefsw", "amrefla", "amrefra", "vlfw", "vrfw", "vsw",
